@@ -1,0 +1,9 @@
+ID,Règle,Description,Action,Priority
+R1,pregnant=t → sex=F,Les patients enceintes doivent être de sexe féminin,Corriger le sexe ou le statut de grossesse,CRITIQUE
+R2,age < 12 → pregnant=f,Les enfants pré-pubertaires ne peuvent pas être enceintes,Corriger le statut de grossesse,CRITIQUE
+R3,"TSH, T3, TT4 > 0",Les valeurs de laboratoire doivent être strictement positives,Remplacer les valeurs ≤ 0 par NaN ou corriger,HAUTE
+R4,0 ≤ age ≤ 120,L'âge doit être dans une plage réaliste,Corriger ou supprimer les enregistrements aberrants,HAUTE
+R5,on_thyroxine=t → TSH mesuré,Les patients sous traitement doivent avoir un suivi TSH,Vérifier pourquoi le TSH n'est pas mesuré,MOYENNE
+R6,TSH < 0.1 → query_hyperthyroid ou target contient K/G,Un TSH très bas devrait être associé à une suspicion d'hyperthyroïdie,Vérifier le diagnostic clinique,MOYENNE
+R7,Pas de doublons sur patient_id,Chaque patient devrait avoir un identifiant unique,Fusionner ou supprimer les doublons,HAUTE
+R8,"TSH: 0.001-100, T3: 0.5-5.0, TT4: 20-200 (plage extrême)",Les valeurs de laboratoire doivent rester dans des plages biologiquement plausibles,"Enquêter sur les valeurs aberrantes, possibles erreurs de saisie",MOYENNE
