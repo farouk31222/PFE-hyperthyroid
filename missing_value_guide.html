@@ -1,0 +1,1512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Missing Value Imputation — Complete Guide</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+/* ─── RESET & TOKENS ─────────────────────────────────────────────────────── */
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+:root {
+  --ink:        #0f0e0d;
+  --paper:      #f5f0e8;
+  --cream:      #ede8dc;
+  --line:       #d4cec2;
+  --muted:      #8a8278;
+  --accent:     #c8381a;
+  --accent2:    #1a6bc8;
+  --accent3:    #1a9e5c;
+  --accent4:    #c8961a;
+  --code-bg:    #1a1a1a;
+  --code-text:  #e8e4dc;
+  --tag-h:      12px;
+  --r:          3px;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'DM Mono', monospace;
+  font-size: 14px;
+  line-height: 1.7;
+  overflow-x: hidden;
+}
+
+/* ─── NOISE TEXTURE ──────────────────────────────────────────────────────── */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.5;
+}
+
+/* ─── NAVIGATION SIDEBAR ─────────────────────────────────────────────────── */
+.sidebar {
+  position: fixed;
+  left: 0; top: 0; bottom: 0;
+  width: 220px;
+  background: var(--ink);
+  padding: 40px 24px;
+  display: flex;
+  flex-direction: column;
+  z-index: 100;
+  border-right: 1px solid #333;
+}
+
+.sidebar-logo {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.1rem;
+  font-weight: 900;
+  color: var(--paper);
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin-bottom: 40px;
+}
+
+.sidebar-logo span { color: var(--accent); }
+
+.nav-section-label {
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #555;
+  margin-bottom: 10px;
+  margin-top: 20px;
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: #888;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  padding: 6px 0;
+  transition: color 0.2s;
+  border-left: 2px solid transparent;
+  padding-left: 8px;
+  margin-left: -8px;
+}
+
+.nav-link:hover, .nav-link.active { color: var(--paper); border-left-color: var(--accent); }
+
+.nav-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  font-size: 10px;
+  color: #444;
+  line-height: 1.6;
+}
+
+/* ─── MAIN CONTENT ───────────────────────────────────────────────────────── */
+.main {
+  margin-left: 220px;
+  min-height: 100vh;
+}
+
+/* ─── HERO ───────────────────────────────────────────────────────────────── */
+.hero {
+  background: var(--ink);
+  padding: 80px 72px 72px;
+  position: relative;
+  overflow: hidden;
+}
+
+.hero::before {
+  content: '';
+  position: absolute;
+  top: -60px; right: -60px;
+  width: 400px; height: 400px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(200,56,26,0.15) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.hero::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, var(--accent), transparent);
+}
+
+.hero-eyebrow {
+  font-size: 10px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 20px;
+  animation: fadeRight 0.7s ease both;
+}
+
+.hero h1 {
+  font-family: 'Playfair Display', serif;
+  font-size: clamp(2.5rem, 5vw, 4rem);
+  font-weight: 900;
+  color: var(--paper);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  max-width: 700px;
+  animation: fadeRight 0.7s 0.1s ease both;
+}
+
+.hero h1 em {
+  font-style: italic;
+  color: var(--accent);
+}
+
+.hero-desc {
+  margin-top: 24px;
+  font-size: 13px;
+  color: #888;
+  max-width: 560px;
+  line-height: 1.8;
+  animation: fadeRight 0.7s 0.2s ease both;
+}
+
+.hero-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 32px;
+  animation: fadeRight 0.7s 0.3s ease both;
+}
+
+.hero-tag {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  border: 1px solid #333;
+  color: #666;
+  padding: 4px 12px;
+  border-radius: 20px;
+}
+
+/* ─── CONTENT WRAPPER ────────────────────────────────────────────────────── */
+.content {
+  padding: 72px;
+  max-width: 980px;
+}
+
+/* ─── SECTION ────────────────────────────────────────────────────────────── */
+.method-section {
+  margin-bottom: 80px;
+  animation: fadeUp 0.6s ease both;
+}
+
+.method-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+  margin-bottom: 32px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--line);
+}
+
+.method-number {
+  font-family: 'Playfair Display', serif;
+  font-size: 4rem;
+  font-weight: 900;
+  color: var(--line);
+  line-height: 1;
+  flex-shrink: 0;
+  margin-top: -8px;
+}
+
+.method-title-block {}
+
+.method-tag {
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  font-weight: 500;
+  padding: 3px 9px;
+  border-radius: var(--r);
+  margin-bottom: 8px;
+  display: inline-block;
+}
+
+.method-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.8rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--ink);
+}
+
+.method-subtitle {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 6px;
+}
+
+/* ─── PROSE ──────────────────────────────────────────────────────────────── */
+.prose {
+  font-size: 13px;
+  color: #3a3530;
+  line-height: 1.9;
+  margin-bottom: 24px;
+}
+
+.prose strong { color: var(--ink); font-weight: 500; }
+.prose code {
+  background: rgba(0,0,0,0.06);
+  padding: 1px 6px;
+  border-radius: 2px;
+  font-size: 12px;
+  color: var(--accent);
+}
+
+/* ─── WHEN TO USE PILLS ──────────────────────────────────────────────────── */
+.when-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.when-card {
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 16px 18px;
+  background: var(--cream);
+}
+
+.when-card-label {
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.when-card.use .when-card-label  { color: var(--accent3); }
+.when-card.avoid .when-card-label { color: var(--accent); }
+
+.when-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.when-list li {
+  font-size: 11px;
+  color: var(--muted);
+  display: flex;
+  gap: 8px;
+  line-height: 1.5;
+}
+
+.when-list li::before {
+  flex-shrink: 0;
+  font-weight: 700;
+}
+
+.when-card.use .when-list li::before  { content: '✓'; color: var(--accent3); }
+.when-card.avoid .when-list li::before { content: '✗'; color: var(--accent); }
+
+/* ─── CODE BLOCK ─────────────────────────────────────────────────────────── */
+.code-block {
+  background: var(--code-bg);
+  border-radius: var(--r);
+  overflow: hidden;
+  margin-bottom: 28px;
+  border: 1px solid #2a2a2a;
+}
+
+.code-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 18px;
+  background: #111;
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.code-lang {
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: #555;
+}
+
+.code-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.code-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+}
+
+.code-body {
+  padding: 20px 24px;
+  overflow-x: auto;
+}
+
+.code-body pre {
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--code-text);
+  white-space: pre;
+}
+
+.c-comment { color: #555; font-style: italic; }
+.c-keyword  { color: #c792ea; }
+.c-func     { color: #82aaff; }
+.c-string   { color: #c3e88d; }
+.c-number   { color: #f78c6c; }
+.c-class    { color: #ffcb6b; }
+.c-var      { color: #89ddff; }
+
+/* ─── COMPLEXITY METER ───────────────────────────────────────────────────── */
+.complexity-row {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 28px;
+  flex-wrap: wrap;
+}
+
+.complexity-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.complexity-label {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.complexity-dots {
+  display: flex;
+  gap: 4px;
+}
+
+.complexity-dot {
+  width: 14px; height: 14px;
+  border-radius: 2px;
+  background: var(--line);
+}
+
+.complexity-dot.filled { background: var(--ink); }
+
+/* ─── PRO TIP ────────────────────────────────────────────────────────────── */
+.pro-tip {
+  border-left: 3px solid var(--accent4);
+  background: rgba(200,150,26,0.06);
+  padding: 16px 20px;
+  border-radius: 0 var(--r) var(--r) 0;
+  margin-bottom: 28px;
+}
+
+.pro-tip-label {
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent4);
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+
+.pro-tip p {
+  font-size: 12px;
+  color: #5a5040;
+  line-height: 1.7;
+}
+
+.pro-tip p code {
+  background: rgba(200,150,26,0.12);
+  padding: 1px 5px;
+  border-radius: 2px;
+  font-size: 11px;
+  color: var(--accent4);
+}
+
+/* ─── COMPARISON TABLE ───────────────────────────────────────────────────── */
+.comparison-section {
+  margin-bottom: 80px;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+thead tr {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+thead th {
+  padding: 14px 18px;
+  text-align: left;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+tbody tr {
+  border-bottom: 1px solid var(--line);
+  transition: background 0.15s;
+}
+
+tbody tr:hover { background: var(--cream); }
+
+tbody td {
+  padding: 13px 18px;
+  color: #3a3530;
+  vertical-align: top;
+}
+
+tbody td:first-child {
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.pill {
+  display: inline-block;
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.pill-red    { background: rgba(200,56,26,0.1);  color: var(--accent);  border: 1px solid rgba(200,56,26,0.2); }
+.pill-green  { background: rgba(26,158,92,0.1);  color: var(--accent3); border: 1px solid rgba(26,158,92,0.2); }
+.pill-yellow { background: rgba(200,150,26,0.1); color: var(--accent4); border: 1px solid rgba(200,150,26,0.2); }
+.pill-blue   { background: rgba(26,107,200,0.1); color: var(--accent2); border: 1px solid rgba(26,107,200,0.2); }
+
+/* ─── DECISION FLOW ──────────────────────────────────────────────────────── */
+.flow-section {
+  margin-bottom: 80px;
+}
+
+.flow-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.flow-node {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+}
+
+.flow-line-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 48px;
+  flex-shrink: 0;
+}
+
+.flow-circle {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 500;
+  flex-shrink: 0;
+  z-index: 1;
+  margin: 8px 0;
+}
+
+.flow-vert-line {
+  width: 2px;
+  flex: 1;
+  min-height: 20px;
+  background: var(--line);
+}
+
+.flow-content {
+  flex: 1;
+  padding: 12px 0 12px 16px;
+}
+
+.flow-question {
+  font-family: 'Playfair Display', serif;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+
+.flow-answer {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.flow-result {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink);
+  background: var(--cream);
+  border: 1px solid var(--line);
+  padding: 4px 12px;
+  border-radius: 20px;
+}
+
+/* ─── SPECIAL FLAG BOX ───────────────────────────────────────────────────── */
+.flag-box {
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: var(--r);
+  padding: 28px 32px;
+  margin-bottom: 80px;
+  position: relative;
+  overflow: hidden;
+}
+
+.flag-box::before {
+  content: '!';
+  position: absolute;
+  right: 32px; top: 50%;
+  transform: translateY(-50%);
+  font-family: 'Playfair Display', serif;
+  font-size: 8rem;
+  font-weight: 900;
+  color: rgba(255,255,255,0.04);
+  line-height: 1;
+  pointer-events: none;
+}
+
+.flag-box-label {
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 10px;
+}
+
+.flag-box h3 {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin-bottom: 12px;
+  letter-spacing: -0.02em;
+}
+
+.flag-box p {
+  font-size: 12px;
+  color: #999;
+  line-height: 1.8;
+  max-width: 600px;
+}
+
+.flag-box code {
+  color: var(--accent);
+  background: rgba(200,56,26,0.15);
+  padding: 1px 6px;
+  border-radius: 2px;
+  font-size: 11px;
+}
+
+/* ─── FOOTER ─────────────────────────────────────────────────────────────── */
+.page-footer {
+  background: var(--cream);
+  border-top: 1px solid var(--line);
+  padding: 32px 72px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* ─── ANIMATIONS ─────────────────────────────────────────────────────────── */
+@keyframes fadeRight {
+  from { opacity:0; transform: translateX(-20px); }
+  to   { opacity:1; transform: translateX(0); }
+}
+
+@keyframes fadeUp {
+  from { opacity:0; transform: translateY(24px); }
+  to   { opacity:1; transform: translateY(0); }
+}
+
+.method-section:nth-child(1) { animation-delay: 0.05s; }
+.method-section:nth-child(2) { animation-delay: 0.10s; }
+.method-section:nth-child(3) { animation-delay: 0.15s; }
+.method-section:nth-child(4) { animation-delay: 0.20s; }
+.method-section:nth-child(5) { animation-delay: 0.25s; }
+.method-section:nth-child(6) { animation-delay: 0.30s; }
+
+/* ─── RESPONSIVE ─────────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .sidebar { display: none; }
+  .main { margin-left: 0; }
+  .hero, .content, .page-footer { padding-left: 24px; padding-right: 24px; }
+  .when-grid { grid-template-columns: 1fr; }
+}
+
+/* scroll highlight active nav */
+.nav-link { transition: color 0.2s, border-color 0.2s; }
+</style>
+</head>
+<body>
+
+<!-- ═══ SIDEBAR ═══════════════════════════════════════════════════════════ -->
+<nav class="sidebar">
+  <div class="sidebar-logo">Missing<br>Value <span>Guide</span></div>
+
+  <div class="nav-section-label">Methods</div>
+  <a href="#deletion"    class="nav-link"><div class="nav-dot" style="background:#c8381a"></div>01 · Deletion</a>
+  <a href="#statistical" class="nav-link"><div class="nav-dot" style="background:#c8961a"></div>02 · Statistical</a>
+  <a href="#grouped"     class="nav-link"><div class="nav-dot" style="background:#c8961a"></div>03 · Group-Based</a>
+  <a href="#knn"         class="nav-link"><div class="nav-dot" style="background:#1a6bc8"></div>04 · KNN</a>
+  <a href="#mice"        class="nav-link"><div class="nav-dot" style="background:#1a9e5c"></div>05 · MICE</a>
+  <a href="#indicator"   class="nav-link"><div class="nav-dot" style="background:#888"></div>06 · Indicator Flag</a>
+
+  <div class="nav-section-label">Reference</div>
+  <a href="#comparison"  class="nav-link"><div class="nav-dot" style="background:#ccc"></div>Comparison Table</a>
+  <a href="#decision"    class="nav-link"><div class="nav-dot" style="background:#ccc"></div>Decision Guide</a>
+
+  <div class="sidebar-footer">
+    Data Science Reference<br>
+    Missing Data Handbook
+  </div>
+</nav>
+
+<!-- ═══ MAIN ══════════════════════════════════════════════════════════════ -->
+<div class="main">
+
+  <!-- HERO -->
+  <header class="hero">
+    <div class="hero-eyebrow">Data Preprocessing · Imputation Techniques</div>
+    <h1>How to Fill<br><em>Missing Values</em><br>Like a Pro</h1>
+    <p class="hero-desc">
+      A comprehensive, practitioner-grade guide to every major missing value imputation method — when to use them, how to implement them in Python, and how to choose the right one for your data.
+    </p>
+    <div class="hero-tags">
+      <span class="hero-tag">Python</span>
+      <span class="hero-tag">Scikit-learn</span>
+      <span class="hero-tag">Pandas</span>
+      <span class="hero-tag">Clinical Data</span>
+      <span class="hero-tag">Tabular ML</span>
+    </div>
+  </header>
+
+  <div class="content">
+
+    <!-- ══ METHOD 01: DELETION ════════════════════════════════════════════ -->
+    <section class="method-section" id="deletion">
+      <div class="method-header">
+        <div class="method-number">01</div>
+        <div class="method-title-block">
+          <div class="method-tag" style="background:rgba(200,56,26,0.1);color:var(--accent);border:1px solid rgba(200,56,26,0.2)">Simplest · No assumptions</div>
+          <div class="method-title">Deletion Methods</div>
+          <div class="method-subtitle">Remove rows or columns with missing data entirely</div>
+        </div>
+      </div>
+
+      <div class="complexity-row">
+        <div class="complexity-item">
+          <div class="complexity-label">Complexity</div>
+          <div class="complexity-dots">
+            <div class="complexity-dot filled"></div>
+            <div class="complexity-dot"></div>
+            <div class="complexity-dot"></div>
+            <div class="complexity-dot"></div>
+            <div class="complexity-dot"></div>
+          </div>
+        </div>
+        <div class="complexity-item">
+          <div class="complexity-label">Data Loss Risk</div>
+          <div class="complexity-dots">
+            <div class="complexity-dot filled" style="background:var(--accent)"></div>
+            <div class="complexity-dot filled" style="background:var(--accent)"></div>
+            <div class="complexity-dot filled" style="background:var(--accent)"></div>
+            <div class="complexity-dot"></div>
+            <div class="complexity-dot"></div>
+          </div>
+        </div>
+        <div class="complexity-item">
+          <div class="complexity-label">Accuracy</div>
+          <div class="complexity-dots">
+            <div class="complexity-dot filled"></div>
+            <div class="complexity-dot"></div>
+            <div class="complexity-dot"></div>
+            <div class="complexity-dot"></div>
+            <div class="complexity-dot"></div>
+          </div>
+        </div>
+      </div>
+
+      <p class="prose">
+        Deletion is the most direct approach: if data is missing, remove it. There are two forms — <strong>listwise deletion</strong> (drop entire rows) and <strong>column deletion</strong> (drop the column entirely). It introduces no assumptions or artifacts, but sacrifices data — sometimes a lot.
+      </p>
+
+      <div class="when-grid">
+        <div class="when-card use">
+          <div class="when-card-label">✓ Use When</div>
+          <ul class="when-list">
+            <li>A column is >80% missing — it carries no signal</li>
+            <li>Missingness is structural (schema mismatch)</li>
+            <li>Very few rows are affected (&lt;1–2% of dataset)</li>
+            <li>Data is Missing Completely At Random (MCAR)</li>
+          </ul>
+        </div>
+        <div class="when-card avoid">
+          <div class="when-card-label">✗ Avoid When</div>
+          <ul class="when-list">
+            <li>You'd lose a significant portion of your data</li>
+            <li>Missingness is informative (MNAR)</li>
+            <li>Dataset is already small</li>
+            <li>Missing column still has partial signal</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="code-block">
+        <div class="code-header">
+          <div class="code-lang">Python · Pandas</div>
+          <div class="code-dots">
+            <div class="code-dot" style="background:#ff5f57"></div>
+            <div class="code-dot" style="background:#ffbd2e"></div>
+            <div class="code-dot" style="background:#28c940"></div>
+          </div>
+        </div>
+        <div class="code-body"><pre><span class="c-comment"># ── Drop columns where more than 80% of values are missing</span>
+threshold = <span class="c-number">0.80</span>
+cols_to_drop = df.columns[df.isnull().mean() &gt; threshold]
+df_clean = df.<span class="c-func">drop</span>(columns=cols_to_drop)
+
+<span class="c-comment"># ── Drop rows where a specific column is missing</span>
+df_clean = df.<span class="c-func">dropna</span>(subset=[<span class="c-string">'age'</span>, <span class="c-string">'sex'</span>])
+
+<span class="c-comment"># ── Drop rows with ANY missing value</span>
+df_clean = df.<span class="c-func">dropna</span>()
+
+<span class="c-comment"># ── Drop rows with more than N missing columns</span>
+df_clean = df[df.<span class="c-func">isnull</span>().<span class="c-func">sum</span>(axis=<span class="c-number">1</span>) &lt;= <span class="c-number">3</span>]
+
+<span class="c-comment"># ── Check what you're losing</span>
+<span class="c-func">print</span>(<span class="c-func">f</span><span class="c-string">"Rows lost: {len(df) - len(df_clean)} ({(1 - len(df_clean)/len(df))*100:.1f}%)"</span>)</pre></div>
+      </div>
+
+      <div class="pro-tip">
+        <div class="pro-tip-label">Pro Tip</div>
+        <p>Before dropping, always compute <code>df.isnull().mean().sort_values(ascending=False)</code> to visualize missingness rates. Set a principled threshold (e.g. 80%) and document your decision — reviewers will ask.</p>
+      </div>
+    </section>
+
+    <!-- ══ METHOD 02: STATISTICAL ════════════════════════════════════════ -->
+    <section class="method-section" id="statistical">
+      <div class="method-header">
+        <div class="method-number">02</div>
+        <div class="method-title-block">
+          <div class="method-tag" style="background:rgba(200,150,26,0.1);color:var(--accent4);border:1px solid rgba(200,150,26,0.2)">Fast · Univariate</div>
+          <div class="method-title">Statistical Imputation</div>
+          <div class="method-subtitle">Fill with mean, median, or mode of the column</div>
+        </div>
+      </div>
+
+      <div class="complexity-row">
+        <div class="complexity-item">
+          <div class="complexity-label">Complexity</div>
+          <div class="complexity-dots">
+            <div class="complexity-dot filled"></div>
+            <div class="complexity-dot filled"></div>
+            <div class="complexity-dot"></div>
+            <div class="complexity-dot"></div>
+            <div class="complexity-dot"></div>
+          </div>
+        </div>
+        <div class="complexity-item">
+          <div class="complexity-label">Data Loss Risk</div>
+          <div class="complexity-dots">
+            <div class="complexity-dot filled" style="background:var(--accent3)"></div>
+            <div class="complexity-dot"></div>
+            <div class="complexity-dot"></div>
+            <div class="complexity-dot"></div>
+            <div class="complexity-dot"></div>
+          </div>
+        </div>
+        <div class="complexity-item">
+          <div class="complexity-label">Accuracy</div>
+          <div class="complexity-dots">
+            <div class="complexity-dot filled"></div>
+            <div class="complexity-dot filled"></div>
+            <div class="complexity-dot"></div>
+            <div class="complexity-dot"></div>
+            <div class="complexity-dot"></div>
+          </div>
+        </div>
+      </div>
+
+      <p class="prose">
+        Replace missing values with a single statistic computed from the non-missing data. <strong>Mean</strong> works for normally distributed numerics. <strong>Median</strong> is more robust for skewed distributions and outlier-prone lab values. <strong>Mode</strong> handles categorical columns. Simple and fast — but ignores relationships between columns.
+      </p>
+
+      <div class="when-grid">
+        <div class="when-card use">
+          <div class="when-card-label">✓ Use When</div>
+          <ul class="when-list">
+            <li>Missing rate is low (&lt;5%)</li>
+            <li>Quick baseline before advanced methods</li>
+            <li>Categorical columns like <code>sex</code> or <code>family_history</code></li>
+            <li>Variable is approximately normally distributed</li>
+          </ul>
+        </div>
+        <div class="when-card avoid">
+          <div class="when-card-label">✗ Avoid When</div>
+          <ul class="when-list">
+            <li>Missing rate is high — distorts distribution</li>
+            <li>Variable has heavy outliers (use median instead)</li>
+            <li>Feature correlates with other variables</li>
+            <li>High-stakes modeling requiring precision</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="code-block">
+        <div class="code-header">
+          <div class="code-lang">Python · Pandas + Scikit-learn</div>
+          <div class="code-dots">
+            <div class="code-dot" style="background:#ff5f57"></div>
+            <div class="code-dot" style="background:#ffbd2e"></div>
+            <div class="code-dot" style="background:#28c940"></div>
+          </div>
+        </div>
+        <div class="code-body"><pre><span class="c-keyword">from</span> sklearn.impute <span class="c-keyword">import</span> <span class="c-class">SimpleImputer</span>
+<span class="c-keyword">import</span> pandas <span class="c-keyword">as</span> pd
+
+<span class="c-comment"># ── Median imputation for numeric lab values</span>
+num_cols = [<span class="c-string">'tsh'</span>, <span class="c-string">'t3'</span>, <span class="c-string">'t4'</span>, <span class="c-string">'t4u'</span>, <span class="c-string">'fti'</span>]
+imputer = <span class="c-class">SimpleImputer</span>(strategy=<span class="c-string">'median'</span>)
+df[num_cols] = imputer.<span class="c-func">fit_transform</span>(df[num_cols])
+
+<span class="c-comment"># ── Mode imputation for categoricals</span>
+cat_cols = [<span class="c-string">'sex'</span>, <span class="c-string">'family_history'</span>]
+cat_imputer = <span class="c-class">SimpleImputer</span>(strategy=<span class="c-string">'most_frequent'</span>)
+df[cat_cols] = cat_imputer.<span class="c-func">fit_transform</span>(df[cat_cols])
+
+<span class="c-comment"># ── Constant imputation (for categoricals → "Unknown")</span>
+df[<span class="c-string">'country'</span>] = df[<span class="c-string">'country'</span>].<span class="c-func">fillna</span>(<span class="c-string">'Unknown'</span>)
+df[<span class="c-string">'ethnicity'</span>] = df[<span class="c-string">'ethnicity'</span>].<span class="c-func">fillna</span>(<span class="c-string">'Unknown'</span>)</pre></div>
+      </div>
+    </section>
+
+    <!-- ══ METHOD 03: GROUP-BASED ════════════════════════════════════════ -->
+    <section class="method-section" id="grouped">
+      <div class="method-header">
+        <div class="method-number">03</div>
+        <div class="method-title-block">
+          <div class="method-tag" style="background:rgba(200,150,26,0.1);color:var(--accent4);border:1px solid rgba(200,150,26,0.2)">Recommended · Context-aware</div>
+          <div class="method-title">Group-Based Imputation</div>
+          <div class="method-subtitle">Compute statistics within subgroups, then fill</div>
+        </div>
+      </div>
+
+      <div class="complexity-row">
+        <div class="complexity-item">
+          <div class="complexity-label">Complexity</div>
+          <div class="complexity-dots">
+            <div class="complexity-dot filled"></div>
+            <div class="complexity-dot filled"></div>
+            <div class="complexity-dot filled"></div>
+            <div class="complexity-dot"></div>
+            <div class="complexity-dot"></div>
+          </div>
+        </div>
+        <div class="complexity-item">
+          <div class="complexity-label">Data Loss Risk</div>
+          <div class="complexity-dots">
+            <div class="complexity-dot filled" style="background:var(--accent3)"></div>
+            <div class="complexity-dot"></div>
+            <div class="complexity-dot"></div>
+            <div class="complexity-dot"></div>
+            <div class="complexity-dot"></div>
+          </div>
+        </div>
+        <div class="complexity-item">
+          <div class="complexity-label">Accuracy</div>
+          <div class="complexity-dots">
+            <div class="complexity-dot filled"></div>
+            <div class="complexity-dot filled"></div>
+            <div class="complexity-dot filled"></div>
+            <div class="complexity-dot"></div>
+            <div class="complexity-dot"></div>
+          </div>
+        </div>
+      </div>
+
+      <p class="prose">
+        A major upgrade over global statistics. Instead of imputing with the global median, you compute the median <em>within each meaningful subgroup</em> — e.g., per diagnosis class, per gender, per data source — and fill with that more specific value. For clinical data, this respects biology: a hyperthyroid patient's TSH should not be imputed with the population TSH.
+      </p>
+
+      <div class="when-grid">
+        <div class="when-card use">
+          <div class="when-card-label">✓ Use When</div>
+          <ul class="when-list">
+            <li>A grouping variable is clinically meaningful (<code>class</code>, <code>sex</code>)</li>
+            <li>You know the variable differs significantly across groups</li>
+            <li>A quick, interpretable upgrade over global stats</li>
+            <li>Groups are large enough to compute stable statistics</li>
+          </ul>
+        </div>
+        <div class="when-card avoid">
+          <div class="when-card-label">✗ Avoid When</div>
+          <ul class="when-list">
+            <li>Groups are very small (unstable estimates)</li>
+            <li>The grouping variable itself has missing values</li>
+            <li>No meaningful categorical structure exists</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="code-block">
+        <div class="code-header">
+          <div class="code-lang">Python · Pandas groupby</div>
+          <div class="code-dots">
+            <div class="code-dot" style="background:#ff5f57"></div>
+            <div class="code-dot" style="background:#ffbd2e"></div>
+            <div class="code-dot" style="background:#28c940"></div>
+          </div>
+        </div>
+        <div class="code-body"><pre><span class="c-comment"># ── Fill t3 using median per (source, class) group</span>
+df[<span class="c-string">'t3'</span>] = df.<span class="c-func">groupby</span>([<span class="c-string">'source'</span>, <span class="c-string">'class'</span>])[<span class="c-string">'t3'</span>].<span class="c-func">transform</span>(
+    <span class="c-keyword">lambda</span> x: x.<span class="c-func">fillna</span>(x.<span class="c-func">median</span>())
+)
+
+<span class="c-comment"># ── If a group has NO non-null values, fall back to global median</span>
+global_median = df[<span class="c-string">'t3'</span>].<span class="c-func">median</span>()
+df[<span class="c-string">'t3'</span>] = df[<span class="c-string">'t3'</span>].<span class="c-func">fillna</span>(global_median)
+
+<span class="c-comment"># ── Apply to multiple lab columns at once</span>
+lab_cols = [<span class="c-string">'tsh'</span>, <span class="c-string">'t3'</span>, <span class="c-string">'t4'</span>, <span class="c-string">'tt4'</span>, <span class="c-string">'fti'</span>]
+<span class="c-keyword">for</span> col <span class="c-keyword">in</span> lab_cols:
+    df[col] = df.<span class="c-func">groupby</span>([<span class="c-string">'source'</span>, <span class="c-string">'class'</span>])[col].<span class="c-func">transform</span>(
+        <span class="c-keyword">lambda</span> x: x.<span class="c-func">fillna</span>(x.<span class="c-func">median</span>())
+    )
+    df[col] = df[col].<span class="c-func">fillna</span>(df[col].<span class="c-func">median</span>())  <span class="c-comment"># fallback</span></pre></div>
+      </div>
+
+      <div class="pro-tip">
+        <div class="pro-tip-label">Pro Tip</div>
+        <p>Always chain a global fallback after group imputation with <code>.fillna(df[col].median())</code>. Some rare groups may have 0 valid values, leaving NaNs silently unfilled — a common bug in production pipelines.</p>
+      </div>
+    </section>
+
+    <!-- ══ METHOD 04: KNN ════════════════════════════════════════════════ -->
+    <section class="method-section" id="knn">
+      <div class="method-header">
+        <div class="method-number">04</div>
+        <div class="method-title-block">
+          <div class="method-tag" style="background:rgba(26,107,200,0.1);color:var(--accent2);border:1px solid rgba(26,107,200,0.2)">Multivariate · Robust</div>
+          <div class="method-title">KNN Imputation</div>
+          <div class="method-subtitle">Fill using the K most similar rows in your dataset</div>
+        </div>
+      </div>
+
+      <div class="complexity-row">
+        <div class="complexity-item">
+          <div class="complexity-label">Complexity</div>
+          <div class="complexity-dots">
+            <div class="complexity-dot filled"></div>
+            <div class="complexity-dot filled"></div>
+            <div class="complexity-dot filled"></div>
+            <div class="complexity-dot"></div>
+            <div class="complexity-dot"></div>
+          </div>
+        </div>
+        <div class="complexity-item">
+          <div class="complexity-label">Data Loss Risk</div>
+          <div class="complexity-dots">
+            <div class="complexity-dot filled" style="background:var(--accent3)"></div>
+            <div class="complexity-dot"></div>
+            <div class="complexity-dot"></div>
+            <div class="complexity-dot"></div>
+            <div class="complexity-dot"></div>
+          </div>
+        </div>
+        <div class="complexity-item">
+          <div class="complexity-label">Accuracy</div>
+          <div class="complexity-dots">
+            <div class="complexity-dot filled"></div>
+            <div class="complexity-dot filled"></div>
+            <div class="complexity-dot filled"></div>
+            <div class="complexity-dot filled"></div>
+            <div class="complexity-dot"></div>
+          </div>
+        </div>
+      </div>
+
+      <p class="prose">
+        KNN finds the <strong>K nearest neighbors</strong> of each row with missing data — based on Euclidean distance across all other features — and fills the missing value with the weighted average (or mode) of those neighbors' values. It respects the multivariate structure of your data, making it excellent when variables are biologically or statistically correlated.
+      </p>
+
+      <div class="when-grid">
+        <div class="when-card use">
+          <div class="when-card-label">✓ Use When</div>
+          <ul class="when-list">
+            <li>Features are correlated (e.g. TSH ↔ T3 ↔ T4)</li>
+            <li>Missing rate is moderate (5–30%)</li>
+            <li>Dataset fits comfortably in memory (&lt;500k rows)</li>
+            <li>You want multivariate imputation without complexity of MICE</li>
+          </ul>
+        </div>
+        <div class="when-card avoid">
+          <div class="when-card-label">✗ Avoid When</div>
+          <ul class="when-list">
+            <li>Dataset is very large — O(n²) distance computation</li>
+            <li>Many categorical features (distance becomes meaningless)</li>
+            <li>Features are independent of each other</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="code-block">
+        <div class="code-header">
+          <div class="code-lang">Python · Scikit-learn KNNImputer</div>
+          <div class="code-dots">
+            <div class="code-dot" style="background:#ff5f57"></div>
+            <div class="code-dot" style="background:#ffbd2e"></div>
+            <div class="code-dot" style="background:#28c940"></div>
+          </div>
+        </div>
+        <div class="code-body"><pre><span class="c-keyword">from</span> sklearn.impute <span class="c-keyword">import</span> <span class="c-class">KNNImputer</span>
+<span class="c-keyword">from</span> sklearn.preprocessing <span class="c-keyword">import</span> <span class="c-class">StandardScaler</span>
+<span class="c-keyword">import</span> pandas <span class="c-keyword">as</span> pd
+
+<span class="c-comment"># ── Select only numeric lab value columns</span>
+lab_cols = [<span class="c-string">'tsh'</span>, <span class="c-string">'t3'</span>, <span class="c-string">'t4'</span>, <span class="c-string">'tt4'</span>, <span class="c-string">'t4u'</span>, <span class="c-string">'fti'</span>, <span class="c-string">'age'</span>]
+df_lab = df[lab_cols].<span class="c-func">copy</span>()
+
+<span class="c-comment"># ── Scale first — KNN is distance-based, scale matters!</span>
+scaler = <span class="c-class">StandardScaler</span>()
+df_scaled = scaler.<span class="c-func">fit_transform</span>(df_lab)
+
+<span class="c-comment"># ── Impute with 5 neighbors (tune this hyperparameter)</span>
+imputer = <span class="c-class">KNNImputer</span>(n_neighbors=<span class="c-number">5</span>, weights=<span class="c-string">'distance'</span>)
+df_imputed_scaled = imputer.<span class="c-func">fit_transform</span>(df_scaled)
+
+<span class="c-comment"># ── Reverse scaling to get back original units</span>
+df_imputed = scaler.<span class="c-func">inverse_transform</span>(df_imputed_scaled)
+df[lab_cols] = df_imputed
+
+<span class="c-comment"># ── Tune K using cross-validation (optional but recommended)</span>
+<span class="c-keyword">for</span> k <span class="c-keyword">in</span> [<span class="c-number">3</span>, <span class="c-number">5</span>, <span class="c-number">10</span>, <span class="c-number">15</span>]:
+    imp = <span class="c-class">KNNImputer</span>(n_neighbors=k)
+    <span class="c-comment"># evaluate imputation quality via downstream model score</span></pre></div>
+      </div>
+
+      <div class="pro-tip">
+        <div class="pro-tip-label">Pro Tip</div>
+        <p>Always <code>StandardScaler</code> your features before KNN imputation. Without scaling, a feature with large values like <code>tt4</code> (range 0–700) will dominate the distance metric and override all other columns — producing silently biased imputations.</p>
+      </div>
+    </section>
+
+    <!-- ══ METHOD 05: MICE ════════════════════════════════════════════════ -->
+    <section class="method-section" id="mice">
+      <div class="method-header">
+        <div class="method-number">05</div>
+        <div class="method-title-block">
+          <div class="method-tag" style="background:rgba(26,158,92,0.1);color:var(--accent3);border:1px solid rgba(26,158,92,0.2)">Gold Standard · Research-grade</div>
+          <div class="method-title">MICE / Iterative Imputer</div>
+          <div class="method-subtitle">Multiple Imputation by Chained Equations</div>
+        </div>
+      </div>
+
+      <div class="complexity-row">
+        <div class="complexity-item">
+          <div class="complexity-label">Complexity</div>
+          <div class="complexity-dots">
+            <div class="complexity-dot filled"></div>
+            <div class="complexity-dot filled"></div>
+            <div class="complexity-dot filled"></div>
+            <div class="complexity-dot filled"></div>
+            <div class="complexity-dot filled"></div>
+          </div>
+        </div>
+        <div class="complexity-item">
+          <div class="complexity-label">Data Loss Risk</div>
+          <div class="complexity-dots">
+            <div class="complexity-dot filled" style="background:var(--accent3)"></div>
+            <div class="complexity-dot"></div>
+            <div class="complexity-dot"></div>
+            <div class="complexity-dot"></div>
+            <div class="complexity-dot"></div>
+          </div>
+        </div>
+        <div class="complexity-item">
+          <div class="complexity-label">Accuracy</div>
+          <div class="complexity-dots">
+            <div class="complexity-dot filled"></div>
+            <div class="complexity-dot filled"></div>
+            <div class="complexity-dot filled"></div>
+            <div class="complexity-dot filled"></div>
+            <div class="complexity-dot filled"></div>
+          </div>
+        </div>
+      </div>
+
+      <p class="prose">
+        MICE is the most statistically rigorous imputation method. It treats each column with missing data as a <strong>regression target</strong>, trains a model using all other columns as predictors, and fills the missing values with predictions. This process iterates until convergence. It accounts for uncertainty in the imputed values and captures complex inter-variable relationships.
+      </p>
+
+      <div class="when-grid">
+        <div class="when-card use">
+          <div class="when-card-label">✓ Use When</div>
+          <ul class="when-list">
+            <li>Multiple columns have moderate-to-high missingness</li>
+            <li>Publishing research or clinical studies</li>
+            <li>Variables have complex non-linear interactions</li>
+            <li>You want statistically valid uncertainty estimates</li>
+          </ul>
+        </div>
+        <div class="when-card avoid">
+          <div class="when-card-label">✗ Avoid When</div>
+          <ul class="when-list">
+            <li>Very large datasets — slow to converge</li>
+            <li>Quick exploratory analysis only</li>
+            <li>100% structurally missing columns (cannot impute)</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="code-block">
+        <div class="code-header">
+          <div class="code-lang">Python · Scikit-learn IterativeImputer</div>
+          <div class="code-dots">
+            <div class="code-dot" style="background:#ff5f57"></div>
+            <div class="code-dot" style="background:#ffbd2e"></div>
+            <div class="code-dot" style="background:#28c940"></div>
+          </div>
+        </div>
+        <div class="code-body"><pre><span class="c-keyword">from</span> sklearn.experimental <span class="c-keyword">import</span> enable_iterative_imputer  <span class="c-comment"># must import first</span>
+<span class="c-keyword">from</span> sklearn.impute <span class="c-keyword">import</span> <span class="c-class">IterativeImputer</span>
+<span class="c-keyword">from</span> sklearn.ensemble <span class="c-keyword">import</span> <span class="c-class">RandomForestRegressor</span>
+<span class="c-keyword">import</span> numpy <span class="c-keyword">as</span> np
+
+<span class="c-comment"># ── Basic MICE with BayesianRidge estimator (default)</span>
+imputer = <span class="c-class">IterativeImputer</span>(
+    max_iter=<span class="c-number">10</span>,
+    random_state=<span class="c-number">42</span>,
+    imputation_order=<span class="c-string">'ascending'</span>  <span class="c-comment"># least missing first</span>
+)
+df_imputed = imputer.<span class="c-func">fit_transform</span>(df[lab_cols])
+
+<span class="c-comment"># ── Advanced: use RandomForest as the estimator (better for non-linear data)</span>
+rf_imputer = <span class="c-class">IterativeImputer</span>(
+    estimator=<span class="c-class">RandomForestRegressor</span>(n_estimators=<span class="c-number">100</span>, random_state=<span class="c-number">42</span>),
+    max_iter=<span class="c-number">10</span>,
+    random_state=<span class="c-number">42</span>
+)
+
+<span class="c-comment"># ── Validate: imputed distribution should match original</span>
+<span class="c-keyword">import</span> matplotlib.pyplot <span class="c-keyword">as</span> plt
+plt.<span class="c-func">hist</span>(df[<span class="c-string">'t3'</span>].<span class="c-func">dropna</span>(), alpha=<span class="c-number">0.5</span>, label=<span class="c-string">'Original'</span>)
+plt.<span class="c-func">hist</span>(df_after[<span class="c-string">'t3'</span>], alpha=<span class="c-number">0.5</span>, label=<span class="c-string">'After MICE'</span>)
+plt.<span class="c-func">legend</span>()  <span class="c-comment"># distributions should overlap closely</span></pre></div>
+      </div>
+    </section>
+
+    <!-- ══ METHOD 06: INDICATOR ══════════════════════════════════════════ -->
+    <section class="method-section" id="indicator">
+      <div class="method-header">
+        <div class="method-number">06</div>
+        <div class="method-title-block">
+          <div class="method-tag" style="background:rgba(100,100,100,0.1);color:#888;border:1px solid rgba(100,100,100,0.2)">Essential · Always use alongside other methods</div>
+          <div class="method-title">Missingness Indicator Flag</div>
+          <div class="method-subtitle">Encode the fact that data was missing as a new feature</div>
+        </div>
+      </div>
+
+      <p class="prose">
+        Before imputing anything, add a binary column for each imputed feature recording whether the original value was missing. In clinical datasets, a missing test result is rarely random — it often means the clinician didn't order the test, which itself is informative about the patient's condition. Providing this signal to your model can significantly improve performance.
+      </p>
+
+      <div class="code-block">
+        <div class="code-header">
+          <div class="code-lang">Python · Pandas</div>
+          <div class="code-dots">
+            <div class="code-dot" style="background:#ff5f57"></div>
+            <div class="code-dot" style="background:#ffbd2e"></div>
+            <div class="code-dot" style="background:#28c940"></div>
+          </div>
+        </div>
+        <div class="code-body"><pre><span class="c-comment"># ── Add missingness flags BEFORE any imputation</span>
+cols_to_flag = [<span class="c-string">'tsh'</span>, <span class="c-string">'t3'</span>, <span class="c-string">'t4'</span>, <span class="c-string">'tt4'</span>, <span class="c-string">'t4u'</span>, <span class="c-string">'fti'</span>]
+
+<span class="c-keyword">for</span> col <span class="c-keyword">in</span> cols_to_flag:
+    df[<span class="c-func">f</span><span class="c-string">'{col}_was_missing'</span>] = df[col].<span class="c-func">isnull</span>().<span class="c-func">astype</span>(<span class="c-func">int</span>)
+
+<span class="c-comment"># ── Also works with MissingIndicator from sklearn</span>
+<span class="c-keyword">from</span> sklearn.impute <span class="c-keyword">import</span> <span class="c-class">MissingIndicator</span>
+
+indicator = <span class="c-class">MissingIndicator</span>(features=<span class="c-string">'missing-only'</span>)
+missing_flags = indicator.<span class="c-func">fit_transform</span>(df[lab_cols])
+flag_cols = [<span class="c-func">f</span><span class="c-string">'{c}_missing'</span> <span class="c-keyword">for</span> c <span class="c-keyword">in</span> lab_cols[indicator.features_]]
+df_flags = pd.<span class="c-class">DataFrame</span>(missing_flags, columns=flag_cols)
+df = pd.<span class="c-func">concat</span>([df, df_flags], axis=<span class="c-number">1</span>)
+
+<span class="c-comment"># ── Now run any imputation method on the original columns</span>
+<span class="c-comment"># The model will see BOTH the imputed value AND the flag</span></pre></div>
+      </div>
+    </section>
+
+    <!-- ══ IMPORTANT WARNING ═════════════════════════════════════════════ -->
+    <div class="flag-box" id="warning">
+      <div class="flag-box-label">Critical Rule</div>
+      <h3>Always Fit on Train, Transform on Test</h3>
+      <p>
+        Whatever imputation method you use, compute your statistics (mean, median, KNN model, MICE model) on the <strong>training set only</strong>, then apply them to the test set. 
+        Never <code>fit_transform(full_dataset)</code> before splitting — this causes <em>data leakage</em>, where future information bleeds into training, leading to optimistically biased evaluation metrics and models that fail in production.
+      </p>
+    </div>
+
+    <!-- ══ COMPARISON TABLE ══════════════════════════════════════════════ -->
+    <section class="comparison-section" id="comparison">
+      <div class="section-tag" style="font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:var(--accent);margin-bottom:12px;display:inline-block;background:rgba(200,56,26,0.08);border:1px solid rgba(200,56,26,0.15);padding:3px 10px;border-radius:2px;">Reference</div>
+      <div class="method-title" style="margin-bottom:24px">Method Comparison</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th>Best For</th>
+              <th>Missing %</th>
+              <th>Speed</th>
+              <th>Accuracy</th>
+              <th>Handles Categoricals</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Row Deletion</td>
+              <td>MCAR, tiny gaps</td>
+              <td><span class="pill pill-green">&lt; 2%</span></td>
+              <td><span class="pill pill-green">Fast</span></td>
+              <td><span class="pill pill-yellow">Low</span></td>
+              <td><span class="pill pill-green">Yes</span></td>
+            </tr>
+            <tr>
+              <td>Column Deletion</td>
+              <td>Structural missingness</td>
+              <td><span class="pill pill-red">&gt; 80%</span></td>
+              <td><span class="pill pill-green">Fast</span></td>
+              <td><span class="pill pill-red">N/A</span></td>
+              <td><span class="pill pill-green">Yes</span></td>
+            </tr>
+            <tr>
+              <td>Mean Imputation</td>
+              <td>Normal distributions</td>
+              <td><span class="pill pill-green">&lt; 5%</span></td>
+              <td><span class="pill pill-green">Fast</span></td>
+              <td><span class="pill pill-yellow">Low</span></td>
+              <td><span class="pill pill-red">No</span></td>
+            </tr>
+            <tr>
+              <td>Median Imputation</td>
+              <td>Skewed/outlier-prone</td>
+              <td><span class="pill pill-green">&lt; 10%</span></td>
+              <td><span class="pill pill-green">Fast</span></td>
+              <td><span class="pill pill-yellow">Medium</span></td>
+              <td><span class="pill pill-red">No</span></td>
+            </tr>
+            <tr>
+              <td>Mode Imputation</td>
+              <td>Categorical columns</td>
+              <td><span class="pill pill-green">&lt; 10%</span></td>
+              <td><span class="pill pill-green">Fast</span></td>
+              <td><span class="pill pill-yellow">Medium</span></td>
+              <td><span class="pill pill-green">Yes</span></td>
+            </tr>
+            <tr>
+              <td>Group-Based Median</td>
+              <td>Clinically stratified data</td>
+              <td><span class="pill pill-yellow">5–30%</span></td>
+              <td><span class="pill pill-green">Fast</span></td>
+              <td><span class="pill pill-blue">Good</span></td>
+              <td><span class="pill pill-yellow">Partial</span></td>
+            </tr>
+            <tr>
+              <td>KNN Imputation</td>
+              <td>Correlated features</td>
+              <td><span class="pill pill-yellow">5–30%</span></td>
+              <td><span class="pill pill-yellow">Medium</span></td>
+              <td><span class="pill pill-blue">Good</span></td>
+              <td><span class="pill pill-yellow">Partial</span></td>
+            </tr>
+            <tr>
+              <td>MICE / IterativeImputer</td>
+              <td>Research, publication</td>
+              <td><span class="pill pill-yellow">Any</span></td>
+              <td><span class="pill pill-red">Slow</span></td>
+              <td><span class="pill pill-green">Best</span></td>
+              <td><span class="pill pill-yellow">Partial</span></td>
+            </tr>
+            <tr>
+              <td>Missingness Flag</td>
+              <td>All methods (combine)</td>
+              <td><span class="pill pill-yellow">Any</span></td>
+              <td><span class="pill pill-green">Fast</span></td>
+              <td><span class="pill pill-blue">Adds signal</span></td>
+              <td><span class="pill pill-green">Yes</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ══ DECISION GUIDE ════════════════════════════════════════════════ -->
+    <section class="flow-section" id="decision">
+      <div class="section-tag" style="font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:var(--accent);margin-bottom:12px;display:inline-block;background:rgba(200,56,26,0.08);border:1px solid rgba(200,56,26,0.15);padding:3px 10px;border-radius:2px;">Decision Guide</div>
+      <div class="method-title" style="margin-bottom:32px">Which Method Should You Use?</div>
+
+      <div class="flow-chart">
+
+        <div class="flow-node">
+          <div class="flow-line-col">
+            <div class="flow-circle" style="background:var(--ink);color:var(--paper);">Q</div>
+            <div class="flow-vert-line"></div>
+          </div>
+          <div class="flow-content">
+            <div class="flow-question">Is the column ≥ 80% missing?</div>
+            <div class="flow-answer">Check: <code>df.isnull().mean()</code>. If a column is almost entirely absent, no imputation can recover it reliably.</div>
+            <span class="flow-result">→ Drop the column entirely</span>
+          </div>
+        </div>
+
+        <div class="flow-node">
+          <div class="flow-line-col">
+            <div class="flow-circle" style="background:var(--ink);color:var(--paper);">Q</div>
+            <div class="flow-vert-line"></div>
+          </div>
+          <div class="flow-content">
+            <div class="flow-question">Is it categorical (sex, family_history, country)?</div>
+            <div class="flow-answer">Categorical columns need mode imputation or a dedicated "Unknown" category.</div>
+            <span class="flow-result">→ Mode imputation or fillna("Unknown")</span>
+          </div>
+        </div>
+
+        <div class="flow-node">
+          <div class="flow-line-col">
+            <div class="flow-circle" style="background:var(--ink);color:var(--paper);">Q</div>
+            <div class="flow-vert-line"></div>
+          </div>
+          <div class="flow-content">
+            <div class="flow-question">Is missing rate very low (< 2%)?</div>
+            <div class="flow-answer">At very low rates, simple methods work just as well as complex ones with no downside.</div>
+            <span class="flow-result">→ Median imputation or row deletion</span>
+          </div>
+        </div>
+
+        <div class="flow-node">
+          <div class="flow-line-col">
+            <div class="flow-circle" style="background:var(--ink);color:var(--paper);">Q</div>
+            <div class="flow-vert-line"></div>
+          </div>
+          <div class="flow-content">
+            <div class="flow-question">Do you have a meaningful grouping variable (diagnosis, source)?</div>
+            <div class="flow-answer">If your data has natural subgroups where the variable behaves differently, group-based median is a big improvement.</div>
+            <span class="flow-result">→ Group-based median (fast, interpretable)</span>
+          </div>
+        </div>
+
+        <div class="flow-node">
+          <div class="flow-line-col">
+            <div class="flow-circle" style="background:var(--ink);color:var(--paper);">Q</div>
+            <div class="flow-vert-line"></div>
+          </div>
+          <div class="flow-content">
+            <div class="flow-question">Are missing features correlated with other features?</div>
+            <div class="flow-answer">If TSH, T3, T4 move together biologically, KNN will leverage those correlations to produce better imputations.</div>
+            <span class="flow-result">→ KNN Imputation (scale features first)</span>
+          </div>
+        </div>
+
+        <div class="flow-node">
+          <div class="flow-line-col">
+            <div class="flow-circle" style="background:var(--ink);color:var(--paper);">Q</div>
+            <div class="flow-vert-line"></div>
+          </div>
+          <div class="flow-content">
+            <div class="flow-question">Is this research or high-stakes production?</div>
+            <div class="flow-answer">For clinical research, publication, or high-stakes ML, use the gold standard. Slower but maximally rigorous.</div>
+            <span class="flow-result">→ MICE / IterativeImputer</span>
+          </div>
+        </div>
+
+        <div class="flow-node">
+          <div class="flow-line-col">
+            <div class="flow-circle" style="background:var(--accent);color:#fff;">★</div>
+          </div>
+          <div class="flow-content" style="padding-top:16px;">
+            <div class="flow-question" style="color:var(--accent)">Always: Add missingness indicator flags</div>
+            <div class="flow-answer">Regardless of which method you choose, always add binary flags recording which values were imputed. These flags often become important features in downstream models.</div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </div><!-- /content -->
+
+  <footer class="page-footer">
+    <span>Missing Value Imputation · Complete Reference Guide</span>
+    <span>Python · Pandas · Scikit-learn · 2026</span>
+  </footer>
+
+</div><!-- /main -->
+
+<script>
+// Highlight active nav on scroll
+const sections = document.querySelectorAll('section[id], div[id]');
+const navLinks = document.querySelectorAll('.nav-link');
+
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      navLinks.forEach(link => {
+        link.classList.remove('active');
+        if (link.getAttribute('href') === '#' + entry.target.id) {
+          link.classList.add('active');
+        }
+      });
+    }
+  });
+}, { threshold: 0.3 });
+
+sections.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>
